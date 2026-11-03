@@ -51,3 +51,18 @@ jobs:
       # 8. SECURITY
       - name: Dependency vulnerability audit
         run: npm audit --audit-level=high
+      
+      # 9. Docker BUILDX
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 10. Docker IMAGE BUILD
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: nestjs-ci-cd:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

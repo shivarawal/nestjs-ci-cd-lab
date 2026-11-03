@@ -1,0 +1,10 @@
+node_modules
+dist
+.git
+.github
+.env
+.env.*
+*.log
+!.env.example
+audit-report.json
+README.md*.tsbuildinfo
