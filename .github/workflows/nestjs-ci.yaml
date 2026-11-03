@@ -69,7 +69,7 @@ jobs:
 
       # 11. Trivy vulnerability scan
       - name: Scan Docker image for vulnerabilities
-        uses: aquasecurity/trivy-action@v1
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: nestjs-ci-cd:${{ github.sha}}
           scan-type: 'image'
@@ -80,7 +80,7 @@ jobs:
 
       # 12. Upload Trivy scan report
       - name: Upload trivy scan report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: trivy-scan-report
 
