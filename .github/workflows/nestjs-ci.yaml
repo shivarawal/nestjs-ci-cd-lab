@@ -60,7 +60,7 @@ jobs:
 
       # 10. Docker IMAGE BUILD
       - name: Build Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
@@ -91,19 +91,36 @@ jobs:
           name: trivy-scan-report
           path: trivy-scan-report.txt
 
-      # 13. Login into  DockerHub 
+     # 13. Login into DockerHub
       - name: Log in to DockerHub
-        uses: docker/login-action@v2
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 14. Tag Docker Image
+      # 14. Tag Docker image
       - name: Tag Docker image
+        if: github.event_name != 'pull_request'
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          IMAGE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
         run: |
-          docker tag nestjs-ci-cd:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/nestjs-ci-cd:${{ github.sha }}
+          docker tag nestjs-ci-cd:${{ github.sha }} \
+            $DOCKERHUB_USERNAME/nestjs-ci-cd:$IMAGE_TAG
 
-      # 15. Push Docker Image
+          docker tag nestjs-ci-cd:${{ github.sha }} \
+            $DOCKERHUB_USERNAME/nestjs-ci-cd:${{ github.sha }}
+
+      # 15. Push Docker image
       - name: Push Docker image
+        if: github.event_name != 'pull_request'
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          IMAGE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
         run: |
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/nestjs-ci-cd:${{ github.sha }}
+          docker push $DOCKERHUB_USERNAME/nestjs-ci-cd:$IMAGE_TAG
+
+          if [ "$IMAGE_TAG" != "${{ github.sha }}" ]; then
+            docker push $DOCKERHUB_USERNAME/nestjs-ci-cd:${{ github.sha }}
+          fi
