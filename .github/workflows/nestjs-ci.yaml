@@ -89,9 +89,19 @@ jobs:
           name: trivy-scan-report
           path: trivy-scan-report.txt
 
-      # 13. Push image to DockerHub 
+      # 13. Login into  DockerHub 
       - name: Log in to DockerHub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # 14. Tag Docker Image
+      - name: Tag Docker image
+        run: |
+          docker tag nestjs-ci-cd:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/nestjs-ci-cd:${{ github.sha }}
+
+      # 15. Push Docker Image
+      - name: Push Docker image
+        run: |
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/nestjs-ci-cd:${{ github.sha }}
