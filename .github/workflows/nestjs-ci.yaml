@@ -104,4 +104,4 @@ jobs:
       # 15. Push Docker Image
       - name: Push Docker image
         run: |
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/nestjs-ci-cd:${{ github.sha }}s
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/nestjs-ci-cd:${{ github.sha }}
