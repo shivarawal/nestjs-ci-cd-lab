@@ -42,6 +42,14 @@ jobs:
       - name: Build application
         run: npm run build
 
+      - name: Upload NestJS build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nestjs-build
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Run unit tests
         run: npm test
 
@@ -163,3 +171,18 @@ jobs:
 
         run: |
           echo "Image digest: $IMAGE_DIGEST"
+
+  consume-artifacts:
+    name: Download and verify BUild Artifacts
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download NestJS build artifacts
+        uses: actions/download-artifacts@v4
+        with:
+          name: nestjs-build
+          path: ./download-build
+      - name: Verify downloaded artifacts
+        run: | 
+          echo "Downloaded Nestjs build artifacts:"
+          ls -lah ./download-build/dist
