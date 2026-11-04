@@ -1,0 +1,21 @@
+name: Setup NestJS Environment
+description: Setup Node.js and install NestJS dependencies
+
+inputs:
+  node-version:
+    description: Node.js version
+    required: true
+    default: '24'
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: npm
+
+    - name: Install dependencies
+      shell: bash
+      run: npm ci
