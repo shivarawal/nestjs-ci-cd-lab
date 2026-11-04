@@ -68,11 +68,10 @@ jobs:
     name: Build, Scan and Publish Docker Image
     needs: ci
     runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
 
     outputs:
-      image_digest: ${{ steps.push-image.outputs.image_digest}}
-
-    if: github.event_name != 'pull_request'
+      image_digest: ${{ steps.push-image.outputs.image_digest }}
 
     steps:
       - name: Checkout source code
@@ -102,8 +101,8 @@ jobs:
           format: table
           output: trivy-scan-report.txt
           exit-code: '1'
-          vuln-type: 'os,library'
-          severity: 'HIGH,CRITICAL'
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
 
       - name: Upload Trivy scan report
         if: always()
@@ -126,13 +125,11 @@ jobs:
           IMAGE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
         run: |
           docker tag nestjs-ci-cd:${{ github.sha }} \
-            $DOCKERHUB_USERNAME/nestjs-ci-cd:$IMAGE_TAG
+            "$DOCKERHUB_USERNAME/nestjs-ci-cd:$IMAGE_TAG"
 
           docker tag nestjs-ci-cd:${{ github.sha }} \
-            $DOCKERHUB_USERNAME/nestjs-ci-cd:${{ github.sha }}
+            "$DOCKERHUB_USERNAME/nestjs-ci-cd:${{ github.sha }}"
 
-      
-      # 15. Push Docker image and capture digest
       - name: Push Docker image
         id: push-image
         env:
@@ -152,13 +149,14 @@ jobs:
           fi
 
           echo "image_digest=$IMAGE_DIGEST" >> "$GITHUB_OUTPUT"
-
           echo "Published image digest: $IMAGE_DIGEST"
 
           if [ "$IMAGE_TAG" != "${{ github.sha }}" ]; then
             docker push "$DOCKERHUB_USERNAME/nestjs-ci-cd:${{ github.sha }}"
           fi
 
+
+  # JOB 3: PROMOTE DOCKER IMAGE
   promote:
     name: Promote Docker Image
     needs: publish
@@ -167,36 +165,43 @@ jobs:
     steps:
       - name: Show published image digest
         env:
-          IMAGE_DIGEST: ${{ needs.publish.outputs.image_digest}}
-
+          IMAGE_DIGEST: ${{ needs.publish.outputs.image_digest }}
         run: |
           echo "Image digest: $IMAGE_DIGEST"
 
+
+  # JOB 4: DOWNLOAD AND VERIFY BUILD ARTIFACTS
   consume-artifacts:
-    name: Download and verify Build Artifacts
+    name: Download and Verify Build Artifacts
     needs: ci
     runs-on: ubuntu-latest
+
     steps:
       - name: Download NestJS build artifact
         uses: actions/download-artifact@v4
         with:
           name: nestjs-build
           path: ./download-build
+
       - name: Verify downloaded artifact
-        run: | 
-          echo "Downloaded Nestjs build artifact:"
+        run: |
+          echo "Downloaded NestJS build artifact:"
           ls -lah ./download-build
 
+
+  # JOB 5: STATIC MATRIX COMPATIBILITY
   matrix-compatibility:
-    name: compatibility - Node ${{ matrix.node-version }}
+    name: Static Compatibility - Node ${{ matrix.node-version }}
     runs-on: ubuntu-latest
 
     strategy:
+      fail-fast: false
+      max-parallel: 2
       matrix:
         node-version: [20, 24]
 
     steps:
-      - name: Checkout Source Code
+      - name: Checkout source code
         uses: actions/checkout@v6
 
       - name: Setup Node.js
@@ -211,4 +216,51 @@ jobs:
       - name: Build application
         run: npm run build
 
-      
+
+  # JOB 6: GENERATE DYNAMIC MATRIX
+  generate-dynamic-matrix:
+    name: Generate Dynamic Matrix
+    runs-on: ubuntu-latest
+
+    outputs:
+      node_versions: ${{ steps.set-matrix.outputs.node_versions }}
+
+    steps:
+      - name: Generate Node.js versions
+        id: set-matrix
+        run: |
+          echo 'node_versions=["20","22","24"]' >> "$GITHUB_OUTPUT"
+
+      - name: Display generated matrix
+        run: |
+          echo "Generated versions:"
+          echo '${{ steps.set-matrix.outputs.node_versions }}'
+
+
+  # JOB 7: DYNAMIC MATRIX COMPATIBILITY
+  dynamic-matrix-compatibility:
+    name: Dynamic Compatibility - Node ${{ matrix.node-version }}
+    needs: generate-dynamic-matrix
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        node-version: ${{ fromJSON(needs.generate-dynamic-matrix.outputs.node_versions) }}
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
