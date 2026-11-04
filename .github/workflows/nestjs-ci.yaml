@@ -1,4 +1,6 @@
+
 name: NestJS CI Pipeline
+
 on:
   push:
     branches:
@@ -9,56 +11,65 @@ on:
     branches:
       - master
   workflow_dispatch:
+
 permissions:
   contents: read
+
 concurrency:
   group: nestjs-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+
+  # JOB 1: APPLICATION VALIDATION
   ci:
-    name: Build, Test, Quality and Security
+    name: Build, Test and Quality
     runs-on: ubuntu-latest
 
     steps:
-      # 1. SOURCE CODE CHECKOUT
       - name: Checkout source code
         uses: actions/checkout@v6
 
-      # 2. NODE ENVIRONMENT
-      - name: Setup node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
-      
-      # 3. DEPENDENCIES
-      - name: install dependencies
+
+      - name: Install dependencies
         run: npm ci
 
-      # 4. BUILD
       - name: Build application
-        run: npm run build 
-      
-      # 5. UNIT TESTS
-      - name: Run units tests
-        run: npm test 
+        run: npm run build
 
-      # 6. INTEGRATION TESTS
+      - name: Run unit tests
+        run: npm test
+
       - name: Run E2E tests
         run: npm run test:e2e
 
-      # 7. CODE QUALITY
       - name: Run lint
         run: npm run lint
 
-      # 8. SECURITY
       - name: Dependency vulnerability audit
         run: npm audit --audit-level=high
-      
-      # 9. Docker BUILDX
+
+
+  # JOB 2: DOCKER BUILD, SCAN AND PUBLISH
+  publish:
+    name: Build, Scan and Publish Docker Image
+    needs: ci
+    runs-on: ubuntu-latest
+
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v6
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 10. Docker IMAGE BUILD
       - name: Build Docker image
         uses: docker/build-push-action@v6
         with:
@@ -70,38 +81,35 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # 11. Trivy vulnerability scan
-      - name: Scan Docker image for vulnerabilities
+      - name: Scan Docker image with Trivy
         id: trivy-scan
         continue-on-error: true
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: nestjs-ci-cd:${{ github.sha}}
-          scan-type: 'image'
-          format: 'table'
-          output: 'trivy-scan-report.txt'
+          image-ref: nestjs-ci-cd:${{ github.sha }}
+          scan-type: image
+          format: table
+          output: trivy-scan-report.txt
           exit-code: '1'
           vuln-type: 'os,library'
           severity: 'HIGH,CRITICAL'
 
-      # 12. Upload Trivy scan report
-      - name: Upload trivy scan report
+      - name: Upload Trivy scan report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: trivy-scan-report
           path: trivy-scan-report.txt
+          if-no-files-found: warn
+          retention-days: 7
 
-     # 13. Login into DockerHub
       - name: Log in to DockerHub
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 14. Tag Docker image
       - name: Tag Docker image
-        if: github.event_name != 'pull_request'
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           IMAGE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
@@ -112,9 +120,7 @@ jobs:
           docker tag nestjs-ci-cd:${{ github.sha }} \
             $DOCKERHUB_USERNAME/nestjs-ci-cd:${{ github.sha }}
 
-      # 15. Push Docker image
       - name: Push Docker image
-        if: github.event_name != 'pull_request'
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           IMAGE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
